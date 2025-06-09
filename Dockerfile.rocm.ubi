@@ -141,6 +141,7 @@ FROM rocm_devel AS build_vllm
 ARG PYTORCH_ROCM_ARCH
 ARG PYTHON_VERSION
 ARG MAX_JOBS
+ARG VLLM_VERSION
 ENV MAX_JOBS=${MAX_JOBS}
 ENV PYTORCH_ROCM_ARCH=${PYTORCH_ROCM_ARCH}
 
@@ -159,12 +160,13 @@ RUN --mount=type=cache,target=/root/.cache/ccache \
     env CFLAGS="-march=haswell" \
         CXXFLAGS="$CFLAGS $CXXFLAGS" \
         CMAKE_BUILD_TYPE=Release \
-        SETUPTOOLS_SCM_PRETEND_VERSION="$VLLM_VERSION" \
+        SETUPTOOLS_SCM_PRETEND_VERSION="${VLLM_VERSION}" \
     python3 setup.py bdist_wheel --dist-dir=dist
 
 #################### libsodium Build IMAGE ####################
 FROM rocm_base as libsodium-builder
 
+ARG MAX_JOBS
 RUN microdnf install -y --nodocs gcc gzip tar \
     && microdnf clean all
 
@@ -180,7 +182,7 @@ RUN CFLAGS="-O3 -Wall -Werror=format-security -Wno-unused-function -Wp,-D_GLIBCX
     ./configure \
         --prefix="/usr/" \
         --libdir=/usr/lib64 && \
-    make -j $(nproc) && \
+    make -j ${MAX_JOBS} && \
     make check
 
 ##################################################################################################
