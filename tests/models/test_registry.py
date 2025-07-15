@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
 import warnings
 
@@ -8,9 +9,9 @@ import torch.cuda
 from vllm.model_executor.models import (is_pooling_model,
                                         is_text_generation_model,
                                         supports_multimodal)
-from vllm.model_executor.models.adapters import (as_classification_model,
-                                                 as_embedding_model,
-                                                 as_reward_model)
+from vllm.model_executor.models.adapters import (as_embedding_model,
+                                                 as_reward_model,
+                                                 as_seq_cls_model)
 from vllm.model_executor.models.registry import (_MULTIMODAL_MODELS,
                                                  _SPECULATIVE_DECODING_MODELS,
                                                  _TEXT_GENERATION_MODELS,
@@ -23,11 +24,6 @@ from .registry import HF_EXAMPLE_MODELS
 
 @pytest.mark.parametrize("model_arch", ModelRegistry.get_supported_archs())
 def test_registry_imports(model_arch):
-
-    # Llama4ForCausalLM does not have a standalone model
-    if model_arch == "Llama4ForCausalLM":
-        return
-
     model_info = HF_EXAMPLE_MODELS.get_hf_info(model_arch)
     model_info.check_transformers_version(on_fail="skip")
 
@@ -42,7 +38,7 @@ def test_registry_imports(model_arch):
         assert is_text_generation_model(model_cls)
 
     # All vLLM models should be convertible to a pooling model
-    assert is_pooling_model(as_classification_model(model_cls))
+    assert is_pooling_model(as_seq_cls_model(model_cls))
     assert is_pooling_model(as_embedding_model(model_cls))
     assert is_pooling_model(as_reward_model(model_cls))
 
@@ -96,11 +92,8 @@ def test_registry_is_pp(model_arch, is_pp, init_cuda):
 
 
 def test_hf_registry_coverage():
-    untested_archs = set(ModelRegistry.get_supported_archs() -
-                         HF_EXAMPLE_MODELS.get_supported_archs())
-
-    # Llama4ForCausalLM does not have a standalone model
-    untested_archs.discard("Llama4ForCausalLM")
+    untested_archs = (ModelRegistry.get_supported_archs() -
+                      HF_EXAMPLE_MODELS.get_supported_archs())
 
     assert not untested_archs, (
         "Please add the following architectures to "

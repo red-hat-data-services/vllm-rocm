@@ -1,4 +1,6 @@
 name: PR Reminder Comment Bot
+permissions:
+  pull-requests: write
 on:
     workflow_dispatch:
 jobs:

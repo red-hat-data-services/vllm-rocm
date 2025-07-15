@@ -27,6 +27,14 @@ RUN microdnf install -y \
 ## Python Installer ############################################################
 FROM base AS python-install
 ARG PYTHON_VERSION
+ARG CUDA_MAJOR
+ARG CUDA_MINOR
+
+ENV CUDA_MAJOR=${CUDA_MAJOR}
+ENV CUDA_MINOR=${CUDA_MINOR}
+ENV UV_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR}
+ENV UV_INDEX_STRATEGY=unsafe-best-match
+ENV PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR}
 
 ENV VIRTUAL_ENV=/opt/vllm
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
@@ -37,52 +45,6 @@ RUN microdnf install -y \
     pip install --no-cache -U pip wheel uv && \
     microdnf clean all
 
-
-## CUDA Base ###################################################################
-FROM python-install AS cuda-base
-
-RUN curl -Lo /etc/yum.repos.d/cuda-rhel9.repo \
-        https://developer.download.nvidia.com/compute/cuda/repos/rhel9/x86_64/cuda-rhel9.repo
-
-ENV CUDA_HOME="/usr/local/cuda" \
-    PATH="${CUDA_HOME}/bin:${PATH}"
-ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${CUDA_HOME}/lib64/stubs/:${CUDA_HOME}/extras/CUPTI/lib64:${LD_LIBRARY_PATH}"
-RUN microdnf install -y \
-        cuda-nvcc-12-4 cuda-nvtx-12-4 cuda-libraries-devel-12-4 && \
-    microdnf clean all && \
-    ln -s ${CUDA_HOME}/lib64/stubs/libcuda.so /usr/lib64/
-
-
-## Python cuda base #################################################################
-FROM cuda-base AS python-cuda-base
-
-ENV VIRTUAL_ENV=/opt/vllm
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-# install cuda and common dependencies
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=requirements-common.txt,target=requirements-common.txt \
-    --mount=type=bind,source=requirements-cuda.txt,target=requirements-cuda.txt \
-    uv pip install \
-        -r requirements-cuda.txt
-
-
-#################### libsodium Build IMAGE ####################
-FROM base AS libsodium-builder
-
-RUN microdnf install -y gcc gzip \
-    && microdnf clean all
-
-WORKDIR /usr/src/libsodium
-
-ARG LIBSODIUM_VERSION
-RUN curl -LO https://github.com/jedisct1/libsodium/releases/download/${LIBSODIUM_VERSION}-RELEASE/libsodium-${LIBSODIUM_VERSION}.tar.gz \
-    && tar -xzvf libsodium*.tar.gz \
-    && rm -f libsodium*.tar.gz \
-    && mv libsodium*/* ./
-
-RUN CFLAGS="-O3 -Wall -Werror=format-security -Wno-unused-function -Wp,-D_GLIBCXX_ASSERTIONS -fstack-protector-strong -fstack-clash-protection -fcf-protection"\
-    ./configure --prefix="/usr/" && make -j $MAX_JOBS && make check
 
 ## Release #####################################################################
 FROM python-install AS vllm-openai
@@ -103,19 +65,13 @@ RUN microdnf install -y gcc && \
     microdnf clean all
 
 
-# Install libsodium for Tensorizer encryption
-RUN --mount=type=bind,from=libsodium-builder,src=/usr/src/libsodium,target=/usr/src/libsodium \
-    make -C /usr/src/libsodium install
-
 COPY LICENSE /licenses/vllm.md
 COPY examples/*.jinja /app/data/template/
 
-# install vllm by running the payload script and then install flashinfer
-ARG FLASHINFER_VERSION
+# install vllm (and any other dependencies )by running the payload script
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,src=payload,target=/workspace/payload \
-    ./payload/run.sh && \
-        uv pip install "${FLASHINFER_VERSION}"
+    ./payload/run.sh
 
 
 ENV HF_HUB_OFFLINE=1 \
