@@ -663,7 +663,7 @@ setup(
     install_requires=get_requirements(),
     extras_require={
         "bench": ["pandas", "datasets"],
-        "tensorizer": ["tensorizer==2.10.1"],
+        "tensorizer": ["tensorizer==2.12.0"],
         "fastsafetensors": ["fastsafetensors >= 0.1.10"],
         "runai":
         ["runai-model-streamer >= 0.13.3", "runai-model-streamer-s3", "boto3"],
