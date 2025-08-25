@@ -189,13 +189,10 @@ RUN --mount=type=bind,from=build_amdsmi,src=/install,target=/install/amdsmi/ \
     uv pip install \
         --index-strategy=unsafe-best-match \
         --extra-index-url "https://download.pytorch.org/whl/rocm${version}" \
-        /install/amdsmi/*.whl\
-        /install/flashattention/*.whl\
+        /install/amdsmi/*.whl \
+        /install/flashattention/*.whl \
         "$(echo /install/vllm/*.whl)[audio,video,tensorizer]" \
-        blobfile && \
-    uv pip install --force-reinstall \
-        --extra-index-url "https://download.pytorch.org/whl/pytorch-triton-rocm/" \
-        pytorch-triton-rocm==3.3.0 triton==3.3.0
+        blobfile
 
 ENV HF_HUB_OFFLINE=1 \
     HOME=/home/vllm \
@@ -238,12 +235,24 @@ FROM vllm-openai as vllm-grpc-adapter
 USER root
 
 ARG VLLM_TGIS_ADAPTER_VERSION
+ARG ROCM_VERSION
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,from=build_vllm,src=/workspace/dist,target=/install/vllm/ \
     HOME=/root uv pip install \
         "$(echo /install/vllm/*.whl)[audio,video,tensorizer]" \
         vllm-tgis-adapter==${VLLM_TGIS_ADAPTER_VERSION}
+
+# [TEMP] Install triton packages (need to be pinned for v0.10.0) in sequence to avoid conflicts
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=cache,target=/root/.cache/uv \
+    export version="$(awk -F. '{print $1"."$2}' <<< $ROCM_VERSION)" && \
+    uv pip install --force-reinstall \
+        --extra-index-url "https://download.pytorch.org/whl/rocm${version}" \
+        triton==3.3.0 && \
+    uv pip install --force-reinstall \
+        --find-links "https://download.pytorch.org/whl/pytorch-triton-rocm/" \
+        pytorch-triton-rocm==3.3.0
 
 
 ENV GRPC_PORT=8033 \
@@ -255,4 +264,3 @@ ENV GRPC_PORT=8033 \
     DISABLE_LOGPROBS_DURING_SPEC_DECODING=false
 
 USER 2000
-ENTRYPOINT ["python3", "-m", "vllm.entrypoints.openai.api_server"]
