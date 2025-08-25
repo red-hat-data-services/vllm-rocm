@@ -194,7 +194,7 @@ RUN --mount=type=bind,from=build_amdsmi,src=/install,target=/install/amdsmi/ \
         "$(echo /install/vllm/*.whl)[audio,video,tensorizer]" \
         blobfile && \
     uv pip install --force-reinstall \
-        --extra-index-url "https://download.pytorch.org/whl/rocm${version}" \
+        --extra-index-url "https://download.pytorch.org/whl/pytorch-triton-rocm/" \
         pytorch-triton-rocm==3.3.0 triton==3.3.0
 
 ENV HF_HUB_OFFLINE=1 \
