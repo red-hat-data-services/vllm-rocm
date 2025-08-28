@@ -46,10 +46,6 @@ spec:
     value: true
   - name: skip-checks
     value: true
-  - name: build-args
-    value: 
-      - max_jobs=48
-      - VLLM_VERSION=0.8.4.3
   - name: fetch-git-tags
     value: true
   - name: clone-depth
